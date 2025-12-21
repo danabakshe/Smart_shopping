@@ -1,3 +1,4 @@
+# server/routes.py
 from flask import Blueprint, jsonify, request
 from server.models import Country, Site
 from server.db import db
@@ -197,35 +198,37 @@ def delete_site(key: str):
 @api.post("/prices")
 def prices():
     """
-    Receives a product_id and a list of country codes
-    and returns a price per country.
+    Receives a product_id (SKU/MKT) and returns a price per country,
+    for all countries currently stored in the DB.
     """
     data = request.get_json(silent=True) or {}
 
     product_id = data.get("product_id")
-    countries = data.get("countries")
+    brand = data.get("brand", "ZARA")
 
     if not isinstance(product_id, str) or not product_id.strip():
         return jsonify({"error": "product_id must be a non-empty string"}), 400
 
-    if (
-        not isinstance(countries, list)
-        or not countries
-        or not all(isinstance(c, str) and c.strip() for c in countries)
-    ):
-        return jsonify({"error": "countries must be a non-empty list of strings"}), 400
+    if brand is not None and (not isinstance(brand, str) or not brand.strip()):
+        return jsonify({"error": "brand must be a non-empty string"}), 400
 
-    normalized_countries = []
-    seen = set()
-    for c in countries:
-        code = c.strip().upper()
-        if code not in seen:
-            seen.add(code)
-            normalized_countries.append(code)
+    product_id = product_id.strip()
+    brand = brand.strip()
 
-    prices_map = get_prices_for_countries(product_id.strip(), normalized_countries)
+    # Pull countries from DB
+    countries = Country.query.order_by(Country.code.asc()).all()
+    country_codes = [c.code.strip().upper() for c in countries if isinstance(c.code, str) and c.code.strip()]
+    # Normalize UK -> GB (ISO standard, works better with Zara)
+    country_codes = ["GB" if c == "UK" else c for c in country_codes]
+
+    if not country_codes:
+        return jsonify({"error": "no countries in database"}), 400
+
+    prices_map = get_prices_for_countries(product_id, country_codes, brand=brand)
 
     return jsonify({
-        "product_id": product_id.strip(),
+        "product_id": product_id,
+        "brand": brand,
+        "countries_count": len(country_codes),
         "prices": prices_map
     })
