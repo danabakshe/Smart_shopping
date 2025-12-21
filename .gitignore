@@ -1,1 +1,31 @@
-../.env
+# Environment variables
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Flask / local DB
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# pytest
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+
+# If project contains Server directory
+Server/.venv/
+Server/**/__pycache__/
+Server/**/instance/
