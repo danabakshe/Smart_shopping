@@ -205,26 +205,72 @@ def prices():
 
     product_id = data.get("product_id")
     brand = data.get("brand", "ZARA")
+    site_key = data.get("site_key")
+    country_code = data.get("country_code")
 
     if not isinstance(product_id, str) or not product_id.strip():
         return jsonify({"error": "product_id must be a non-empty string"}), 400
+
+    if site_key is not None and (not isinstance(site_key, str) or not site_key.strip()):
+        return jsonify({"error": "site_key must be a non-empty string or null"}), 400
+
+    if country_code is not None and (not isinstance(country_code, str) or not country_code.strip()):
+        return jsonify({"error": "country_code must be a non-empty string or null"}), 400
 
     if brand is not None and (not isinstance(brand, str) or not brand.strip()):
         return jsonify({"error": "brand must be a non-empty string"}), 400
 
     product_id = product_id.strip()
     brand = brand.strip()
+    site_base_url = None
 
-    # Pull countries from DB
-    countries = Country.query.order_by(Country.code.asc()).all()
-    country_codes = [c.code.strip().upper() for c in countries if isinstance(c.code, str) and c.code.strip()]
-    # Normalize UK -> GB (ISO standard, works better with Zara)
-    country_codes = ["GB" if c == "UK" else c for c in country_codes]
+    # If site_key was provided, map it to a Site and use its name as the brand.
+    # This keeps the response consistent and allows clients to choose a site.
+    if isinstance(site_key, str) and site_key.strip():
+        key = site_key.strip().lower()
+        site = Site.query.filter_by(key=key).first()
+        if site is None:
+            return jsonify({"error": f"site '{key}' not found"}), 404
+        brand = site.name
+        site_base_url = site.base_url
+
+    # Determine which countries to price (single selected country is strongly preferred to avoid API quota blowups)
+    if isinstance(country_code, str) and country_code.strip():
+        requested = country_code.strip().upper()
+        requested_norm = "GB" if requested == "UK" else requested
+
+        country = Country.query.filter_by(code=requested).first()
+        if country is None and requested != requested_norm:
+            # If user provided UK, allow matching stored UK code too
+            country = Country.query.filter_by(code=requested_norm).first()
+
+        if country is None:
+            return jsonify({"error": f"country '{requested}' not found"}), 404
+
+        country_codes = [requested_norm]
+    else:
+        # Pull countries from DB
+        countries = Country.query.order_by(Country.code.asc()).all()
+        country_codes = [c.code.strip().upper() for c in countries if isinstance(c.code, str) and c.code.strip()]
+        # Normalize UK -> GB (ISO standard, works better with Zara)
+        country_codes = ["GB" if c == "UK" else c for c in country_codes]
 
     if not country_codes:
         return jsonify({"error": "no countries in database"}), 400
 
-    prices_map = get_prices_for_countries(product_id, country_codes, brand=brand)
+    prices_map = get_prices_for_countries(product_id, country_codes, brand=brand, site_base_url=site_base_url)
+
+    # If the caller requested a single country and we hit quota exhaustion, surface it as 429 for the client UX.
+    if len(country_codes) == 1:
+        only_code = country_codes[0]
+        only = prices_map.get(only_code) if isinstance(prices_map, dict) else None
+        if isinstance(only, dict) and (only.get("error") in {"RESOURCE_EXHAUSTED", "quota_exceeded"}):
+            payload = {
+                "error": only.get("message") or "Quota exceeded",
+                "error_code": only.get("error_code") or "quota_exceeded",
+                "retry_after": only.get("retry_after"),
+            }
+            return jsonify(payload), 429
 
     return jsonify({
         "product_id": product_id,

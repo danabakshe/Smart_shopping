@@ -18,11 +18,17 @@ from server.db import db
 # Load environment variables from project root (.env)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 ENV_PATH = ROOT_DIR / ".env"
-load_dotenv(ENV_PATH)
+try:
+    # In some restricted environments (CI/sandbox), .env may be unreadable; that's OK if vars are set another way.
+    if ENV_PATH.exists():
+        load_dotenv(ENV_PATH)
+except PermissionError:
+    # Avoid crashing import-time in tests/CI.
+    pass
 
-# Debug (temporary): show where we loaded from and if key exists
-print(f"[dotenv] loaded from: {ENV_PATH} (exists={ENV_PATH.exists()})")
-print(f"[dotenv] GEMINI_API_KEY set? {bool(os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY'))}")
+if os.getenv("DEBUG_DOTENV") == "1":
+    print(f"[dotenv] loaded from: {ENV_PATH} (exists={ENV_PATH.exists()})")
+    print(f"[dotenv] GEMINI_API_KEY set? {bool(os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY'))}")
 
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)

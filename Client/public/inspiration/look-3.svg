@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <defs>
+    <radialGradient id="bg3" cx="40%" cy="30%" r="85%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#efefef"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="600" fill="url(#bg3)"/>
+
+  <!-- Shoes: minimalist sneaker profile -->
+  <g fill="none" stroke="#111" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M120 360c80 0 150-40 210-120 18 38 46 68 90 86 40 16 70 18 110 18 20 0 40 14 44 34l18 90c6 28-16 52-44 52H150c-28 0-50-22-50-50v-40c0-40 12-70 20-70z" stroke-width="14" opacity="0.92"/>
+    <path d="M210 300l36 28" stroke-width="12" opacity="0.4"/>
+    <path d="M250 286l38 28" stroke-width="12" opacity="0.35"/>
+    <path d="M292 270l40 28" stroke-width="12" opacity="0.3"/>
+    <path d="M140 470h420" stroke-width="10" opacity="0.22"/>
+    <path d="M170 520v-60" stroke-width="10" opacity="0.18"/>
+    <path d="M230 520v-60" stroke-width="10" opacity="0.18"/>
+    <path d="M290 520v-60" stroke-width="10" opacity="0.18"/>
+    <path d="M350 520v-60" stroke-width="10" opacity="0.18"/>
+    <path d="M410 520v-60" stroke-width="10" opacity="0.18"/>
+    <path d="M470 520v-60" stroke-width="10" opacity="0.18"/>
+  </g>
+  <circle cx="155" cy="165" r="55" fill="#111" opacity="0.05"/>
+</svg>
+
