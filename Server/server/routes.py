@@ -207,6 +207,7 @@ def prices():
     brand = data.get("brand", "ZARA")
     site_key = data.get("site_key")
     country_code = data.get("country_code")
+    country_codes = data.get("country_codes")
 
     if not isinstance(product_id, str) or not product_id.strip():
         return jsonify({"error": "product_id must be a non-empty string"}), 400
@@ -216,6 +217,12 @@ def prices():
 
     if country_code is not None and (not isinstance(country_code, str) or not country_code.strip()):
         return jsonify({"error": "country_code must be a non-empty string or null"}), 400
+
+    if country_codes is not None and not isinstance(country_codes, list):
+        return jsonify({"error": "country_codes must be a list of strings or null"}), 400
+
+    if country_code is not None and country_codes is not None:
+        return jsonify({"error": "provide only one of: country_code, country_codes"}), 400
 
     if brand is not None and (not isinstance(brand, str) or not brand.strip()):
         return jsonify({"error": "brand must be a non-empty string"}), 400
@@ -235,7 +242,29 @@ def prices():
         site_base_url = site.base_url
 
     # Determine which countries to price (single selected country is strongly preferred to avoid API quota blowups)
-    if isinstance(country_code, str) and country_code.strip():
+    if isinstance(country_codes, list):
+        requested_raw = [c for c in country_codes if isinstance(c, str) and c.strip()]
+        requested = [(c.strip().upper()) for c in requested_raw]
+        if not requested:
+            return jsonify({"error": "country_codes must contain at least one non-empty string"}), 400
+
+        # De-duplicate but preserve order
+        seen = set()
+        requested = [c for c in requested if not (c in seen or seen.add(c))]
+
+        # Normalize UK -> GB (ISO standard, works better with Zara)
+        requested_norm = ["GB" if c == "UK" else c for c in requested]
+
+        existing = {c.code.strip().upper() for c in Country.query.with_entities(Country.code).all()}
+        missing = [c for c in requested if c not in existing and ("GB" if c == "UK" else c) not in existing]
+        if missing:
+            # Keep error format consistent with single-country behavior
+            if len(missing) == 1:
+                return jsonify({"error": f"country '{missing[0]}' not found"}), 404
+            return jsonify({"error": f"countries not found: {', '.join(missing)}"}), 404
+
+        country_codes = requested_norm
+    elif isinstance(country_code, str) and country_code.strip():
         requested = country_code.strip().upper()
         requested_norm = "GB" if requested == "UK" else requested
 

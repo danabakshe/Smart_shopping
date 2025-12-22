@@ -52,6 +52,13 @@
   gap: 0.75rem;
 }
 
+.custom-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .custom-select-trigger:disabled {
   background-color: #f2f2f2;
   cursor: not-allowed;
@@ -77,6 +84,42 @@
   padding: 0.6rem 0.75rem;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.custom-select-option.is-multi {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.custom-select-option.is-select-all {
+  border-bottom: 1px solid #eee;
+  margin-bottom: 0.25rem;
+}
+
+.option-check {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  background: #fff;
+  color: #111;
+}
+
+.option-check.is-checked {
+  background: #4CAF50;
+  border-color: #4CAF50;
+  color: #fff;
+}
+
+.option-label {
+  min-width: 0;
 }
 
 .custom-select-option.is-highlighted,
@@ -141,7 +184,7 @@
   padding: 2rem;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  width: 50%;
+  width: min(1200px, 92vw);
   margin-left: auto;
   margin-right: auto;
 }
@@ -181,6 +224,7 @@
   font-weight: 500;
   display: inline-block;
   margin-top: 0.5rem;
+  white-space: nowrap;
 }
 
 .product-link:hover {
@@ -194,12 +238,6 @@
   margin-top: 0.5rem;
 }
 
-.confidence {
-  font-size: 0.85rem;
-  color: #888;
-  margin-top: 0.5rem;
-}
-
 .not-found {
   color: #999;
   font-style: italic;
@@ -209,5 +247,102 @@
   font-size: 0.85rem;
   color: #c62828;
   margin-top: 0.5rem;
+}
+
+.results-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  justify-content: center;
+}
+
+.results-table {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.results-table thead th {
+  background: #fafafa;
+  color: #333;
+  font-weight: 700;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.results-table tbody td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid #f1f1f1;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.results-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.results-table .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95rem;
+}
+
+.results-table .desc {
+  color: #555;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.results-table .price {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.results-table th:nth-child(1),
+.results-table td:nth-child(1) {
+  width: 14%;
+}
+
+.results-table th:nth-child(2),
+.results-table td:nth-child(2) {
+  width: 14%;
+}
+
+.results-table th:nth-child(3),
+.results-table td:nth-child(3) {
+  width: 14%;
+}
+
+.results-table th:nth-child(4),
+.results-table td:nth-child(4) {
+  width: 30%;
+}
+
+.results-table th:nth-child(5),
+.results-table td:nth-child(5) {
+  width: 12%;
+}
+
+.results-table th:nth-child(6),
+.results-table td:nth-child(6) {
+  width: 16%;
+}
+
+.results-table .price.is-found {
+  color: #111;
+}
+
+.results-table .price.is-missing {
+  color: #999;
+  font-weight: 600;
 }
 

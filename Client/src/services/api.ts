@@ -52,8 +52,20 @@ export const api = {
       productId: string,
       siteKey?: string,
       brand: string = 'ZARA',
-      countryCode?: string
+      countryCodeOrCodes?: string | string[]
     ): Promise<PricesResponse> => {
+      const country_code =
+        typeof countryCodeOrCodes === 'string' && countryCodeOrCodes.trim()
+          ? countryCodeOrCodes.trim()
+          : undefined
+
+      const country_codes =
+        Array.isArray(countryCodeOrCodes) && countryCodeOrCodes.length > 0
+          ? countryCodeOrCodes
+              .filter((c) => typeof c === 'string' && c.trim())
+              .map((c) => c.trim())
+          : undefined
+
       const response = await fetch(`${API_BASE_URL}/prices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,7 +73,8 @@ export const api = {
           product_id: productId,
           brand,
           site_key: siteKey,
-          country_code: countryCode
+          ...(country_codes ? { country_codes } : {}),
+          ...(country_code ? { country_code } : {})
         })
       })
       if (!response.ok) {
