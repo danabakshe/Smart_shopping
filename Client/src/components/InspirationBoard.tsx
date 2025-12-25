@@ -1,4 +1,3 @@
-import React from 'react'
 import './InspirationBoard.css'
 
 type InspirationImage = {
@@ -27,5 +26,6 @@ export default function InspirationBoard({ title, images }: Props) {
     </aside>
   )
 }
+
 
 

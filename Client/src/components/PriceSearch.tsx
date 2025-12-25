@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { api, Country, PriceResult, Site } from '../services/api'
+import { api, Country, FxResponse, PriceResult, Site } from '../services/api'
 import './PriceSearch.css'
 
 type PriceRow = {
@@ -9,9 +9,13 @@ type PriceRow = {
   mkt: string
   description: string
   priceWithCurrency: string
+  price: number | null
+  currencyRaw: string | null
   productUrl: string | null
   found: boolean
 }
+
+type FxCurrency = 'USD' | 'EUR' | 'ILS'
 
 function extractDescriptionFromEvidence(evidence: string | null): string {
   if (!evidence) return ''
@@ -27,6 +31,51 @@ function formatPriceWithCurrency(result: PriceResult): string {
   return `${result.price} ${result.currency}`
 }
 
+function normalizeCurrency(raw: string | null): FxCurrency | null {
+  if (!raw || typeof raw !== 'string') return null
+  const s = raw.trim().toUpperCase()
+  if (!s) return null
+
+  // Common symbols / synonyms from LLM output
+  if (s.includes('$') || s === 'USD' || s.includes('USD') || s.includes('US$')) return 'USD'
+  if (s.includes('€') || s === 'EUR' || s.includes('EUR') || s.includes('EURO')) return 'EUR'
+  if (s.includes('₪') || s === 'ILS' || s.includes('ILS') || s.includes('NIS') || s.includes('SHEKEL')) return 'ILS'
+
+  if (s === 'EU') return 'EUR'
+  return null
+}
+
+function parseEnvNumber(v: unknown): number | null {
+  if (typeof v !== 'string') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function getUsdPerUnitRatesFallback(): Record<FxCurrency, number> {
+  // Fallback FX (demo) - 1 unit of currency = X USD
+  const env: any = (import.meta as any)?.env || {}
+  const usdPerEur = parseEnvNumber(env.VITE_USD_PER_EUR) ?? 1.09
+  const usdPerIls = parseEnvNumber(env.VITE_USD_PER_ILS) ?? 0.27
+  return { USD: 1, EUR: usdPerEur, ILS: usdPerIls }
+}
+
+function convertCurrency(amount: number, from: FxCurrency, to: FxCurrency, usdPerUnit: Record<FxCurrency, number>): number {
+  return (amount * usdPerUnit[from]) / usdPerUnit[to]
+}
+
+function formatCurrency(amount: number, currency: FxCurrency): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    }).format(amount)
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`
+  }
+}
+
 function PriceSearch() {
   const [sites, setSites] = useState<Site[]>([])
   const [selectedSiteKey, setSelectedSiteKey] = useState<string>('')
@@ -38,6 +87,10 @@ function PriceSearch() {
   const [loadingCountries, setLoadingCountries] = useState(true)
   const [results, setResults] = useState<PriceRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [selectedFxCurrency, setSelectedFxCurrency] = useState<FxCurrency>('USD')
+  const [usdPerUnit, setUsdPerUnit] = useState<Record<FxCurrency, number>>(() => getUsdPerUnitRatesFallback())
 
   const [siteOpen, setSiteOpen] = useState(false)
   const [siteHighlightedIdx, setSiteHighlightedIdx] = useState<number>(-1)
@@ -80,6 +133,40 @@ function PriceSearch() {
     }
     fetchCountries()
   }, [])
+
+  useEffect(() => {
+    if (!advancedOpen) return
+
+    let cancelled = false
+    const run = async () => {
+      try {
+        const data: FxResponse = await api.fx.get('USD', ['USD', 'EUR', 'ILS'])
+        const eurPerUsd = Number((data.rates || ({} as any)).EUR)
+        const ilsPerUsd = Number((data.rates || ({} as any)).ILS)
+
+        if (!Number.isFinite(eurPerUsd) || eurPerUsd <= 0 || !Number.isFinite(ilsPerUsd) || ilsPerUsd <= 0) {
+          throw new Error('Invalid FX rates payload')
+        }
+
+        const next: Record<FxCurrency, number> = {
+          USD: 1,
+          EUR: 1 / eurPerUsd,
+          ILS: 1 / ilsPerUsd,
+        }
+
+        if (cancelled) return
+        setUsdPerUnit(next)
+      } catch {
+        if (cancelled) return
+        setUsdPerUnit(getUsdPerUnitRatesFallback())
+      }
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [advancedOpen])
 
   const selectedSiteLabel = useMemo(() => {
     const s = sites.find((x) => x.key === selectedSiteKey)
@@ -187,6 +274,7 @@ function PriceSearch() {
 
         const fallbackDescParts = [description]
         if (!r.found) {
+          fallbackDescParts.push('Price not found')
           const detail = r.message || r.error || ''
           if (detail) fallbackDescParts.push(detail)
         }
@@ -198,6 +286,8 @@ function PriceSearch() {
           mkt: data.product_id,
           description: fallbackDescParts.filter(Boolean).join(' — '),
           priceWithCurrency,
+          price: r.price ?? null,
+          currencyRaw: r.currency ?? null,
           productUrl,
           found: Boolean(r.found),
         }
@@ -215,6 +305,8 @@ function PriceSearch() {
       setLoading(false)
     }
   }
+
+  const showConvertedColumn = advancedOpen && Boolean(selectedFxCurrency)
 
   return (
     <div className="price-search">
@@ -467,13 +559,76 @@ function PriceSearch() {
           />
         </div>
 
-        <button
-          type="submit"
-          className="search-submit"
-          disabled={loading || loadingCountries || loadingSites || !mkt.trim() || !selectedSiteKey || selectedCountries.length === 0}
-        >
-          {loading ? 'Searching...' : 'Search Price'}
-        </button>
+        {advancedOpen && (
+          <div className="form-group advanced-currency">
+            <label>Choose currency:</label>
+            <div className="currency-picker" role="radiogroup" aria-label="Select currency for conversion">
+              <button
+                type="button"
+                className={`currency-option${selectedFxCurrency === 'USD' ? ' is-selected' : ''}`}
+                role="radio"
+                aria-checked={selectedFxCurrency === 'USD'}
+                onClick={() => setSelectedFxCurrency('USD')}
+              >
+                <span className="option-check" aria-hidden="true">
+                  {selectedFxCurrency === 'USD' ? '✓' : ''}
+                </span>
+                <span className="currency-label">USD ($)</span>
+              </button>
+              <button
+                type="button"
+                className={`currency-option${selectedFxCurrency === 'EUR' ? ' is-selected' : ''}`}
+                role="radio"
+                aria-checked={selectedFxCurrency === 'EUR'}
+                onClick={() => setSelectedFxCurrency('EUR')}
+              >
+                <span className="option-check" aria-hidden="true">
+                  {selectedFxCurrency === 'EUR' ? '✓' : ''}
+                </span>
+                <span className="currency-label">EUR (€)</span>
+              </button>
+              <button
+                type="button"
+                className={`currency-option${selectedFxCurrency === 'ILS' ? ' is-selected' : ''}`}
+                role="radio"
+                aria-checked={selectedFxCurrency === 'ILS'}
+                onClick={() => setSelectedFxCurrency('ILS')}
+              >
+                <span className="option-check" aria-hidden="true">
+                  {selectedFxCurrency === 'ILS' ? '✓' : ''}
+                </span>
+                <span className="currency-label">ILS (₪)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="form-actions">
+          <button
+            type="submit"
+            className="search-submit"
+            disabled={
+              loading ||
+              loadingCountries ||
+              loadingSites ||
+              !mkt.trim() ||
+              !selectedSiteKey ||
+              selectedCountries.length === 0
+            }
+          >
+            {loading ? 'Searching...' : 'Search Price'}
+          </button>
+
+          <button
+            type="button"
+            className="advanced-toggle"
+            disabled={loading}
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen((v) => !v)}
+          >
+            {advancedOpen ? 'Hide Advanced' : 'Advanced Search'}
+          </button>
+        </div>
       </form>
 
       {error && (
@@ -494,6 +649,15 @@ function PriceSearch() {
                   <th scope="col">MKT</th>
                   <th scope="col">Item Description</th>
                   <th scope="col">Price</th>
+                  {showConvertedColumn && (
+                    <th scope="col">
+                      {selectedFxCurrency === 'USD'
+                        ? 'Price (USD $)'
+                        : selectedFxCurrency === 'EUR'
+                          ? 'Price (EUR €)'
+                          : 'Price (ILS ₪)'}
+                    </th>
+                  )}
                   <th scope="col">Website Link</th>
                 </tr>
               </thead>
@@ -507,6 +671,17 @@ function PriceSearch() {
                     <td className={`price ${row.found ? 'is-found' : 'is-missing'}`}>
                       {row.priceWithCurrency || (row.found ? '' : '—')}
                     </td>
+                    {showConvertedColumn && (
+                      <td className={`price converted ${row.found ? 'is-found' : 'is-missing'}`}>
+                        {(() => {
+                          if (!row.found || row.price == null) return '—'
+                          const from = normalizeCurrency(row.currencyRaw)
+                          if (!from) return '—'
+                          const converted = convertCurrency(row.price, from, selectedFxCurrency, usdPerUnit)
+                          return formatCurrency(converted, selectedFxCurrency)
+                        })()}
+                      </td>
+                    )}
                     <td>
                       {row.productUrl ? (
                         <a

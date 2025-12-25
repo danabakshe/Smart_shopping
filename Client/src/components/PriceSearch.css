@@ -156,6 +156,71 @@
   transition: background-color 0.3s;
 }
 
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.form-actions .search-submit {
+  flex: 1 1 auto;
+}
+
+.advanced-toggle {
+  flex: 0 0 auto;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #333;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+
+.advanced-toggle:hover:not(:disabled) {
+  background: #f7f7f7;
+  border-color: #cfcfcf;
+}
+
+.advanced-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.advanced-currency .currency-picker {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.currency-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  color: #111;
+}
+
+.currency-option:hover {
+  background: #f5f5f5;
+}
+
+.currency-option.is-selected {
+  border-color: #4CAF50;
+  background: #f2fbf3;
+}
+
+.currency-label {
+  min-width: 5.2rem;
+}
+
 .search-form .search-submit:hover:not(:disabled) {
   background-color: var(--brand-pink-hover);
 }
@@ -193,6 +258,15 @@
   .search-form,
   .error-message,
   .result-card {
+    width: 100%;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .advanced-toggle {
     width: 100%;
   }
 }
@@ -334,7 +408,17 @@
 
 .results-table th:nth-child(6),
 .results-table td:nth-child(6) {
+  width: 12%;
+}
+
+.results-table th:nth-child(7),
+.results-table td:nth-child(7) {
   width: 16%;
+}
+
+.results-table .price.converted {
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .results-table .price.is-found {

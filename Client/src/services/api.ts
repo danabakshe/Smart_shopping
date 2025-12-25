@@ -30,6 +30,12 @@ export interface PricesResponse {
   prices: Record<string, PriceResult>
 }
 
+export interface FxResponse {
+  base: string
+  as_of_utc?: string | null
+  rates: Record<string, number>
+}
+
 export const api = {
   countries: {
     list: async (): Promise<Country[]> => {
@@ -43,6 +49,39 @@ export const api = {
     list: async (): Promise<Site[]> => {
       const response = await fetch(`${API_BASE_URL}/sites`)
       if (!response.ok) throw new Error('Failed to fetch sites')
+      return response.json()
+    }
+  },
+
+  fx: {
+    get: async (base: string = 'USD', symbols: string[] = ['USD', 'EUR', 'ILS']): Promise<FxResponse> => {
+      const b = (base || 'USD').trim().toUpperCase()
+      const syms = (Array.isArray(symbols) ? symbols : ['USD', 'EUR', 'ILS'])
+        .filter((s) => typeof s === 'string' && s.trim())
+        .map((s) => s.trim().toUpperCase())
+      const params = new URLSearchParams()
+      params.set('base', b)
+      params.set('symbols', syms.join(','))
+
+      const response = await fetch(`${API_BASE_URL}/fx?${params.toString()}`)
+      if (!response.ok) {
+        let payload: any = null
+        try {
+          payload = await response.json()
+        } catch {
+          payload = null
+        }
+        if (response.status === 429) {
+          const retryAfter = payload?.retry_after
+          const seconds =
+            typeof retryAfter === 'number' && Number.isFinite(retryAfter)
+              ? Math.max(1, Math.ceil(retryAfter))
+              : null
+          const msg = seconds != null ? `FX rate limit exceeded. Please retry in ${seconds}s.` : 'FX rate limit exceeded.'
+          throw new Error(msg)
+        }
+        throw new Error(payload?.error || 'Failed to fetch FX rates')
+      }
       return response.json()
     }
   },
