@@ -9,8 +9,28 @@ import random
 from urllib.parse import urlparse
 from typing import Optional, Dict, List, Any
 
-from google import genai
-from google.genai import types
+try:
+    # Optional dependency: the server should still boot without it (e.g., in sandbox/CI).
+    # Endpoints that require Gemini will return a clear 503 with guidance.
+    from google import genai  # type: ignore
+    from google.genai import types  # type: ignore
+    _GENAI_AVAILABLE = True
+except Exception:  # ImportError (and any packaging edge cases)
+    genai = None  # type: ignore
+    types = None  # type: ignore
+    _GENAI_AVAILABLE = False
+
+
+class GenAIUnavailableError(RuntimeError):
+    """Raised when google-genai isn't installed/configured but a Gemini-backed endpoint is called."""
+
+
+def _require_genai() -> None:
+    if not _GENAI_AVAILABLE:
+        raise GenAIUnavailableError(
+            "Gemini integration is unavailable because 'google-genai' is not installed. "
+            "Install it with: pip install -r server/requirements.txt"
+        )
 
 
 _PRICE_CACHE: Dict[str, Dict[str, object]] = {}
@@ -72,6 +92,7 @@ def _site_query_hints(hint_base_url: str | None, product_id: str) -> str:
 
 
 def _get_client() -> genai.Client:
+    _require_genai()
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError("Missing GEMINI_API_KEY (or GOOGLE_API_KEY). Check your .env loading.")
@@ -151,9 +172,24 @@ def _cache_set(key: str, value: dict) -> None:
 
 
 def _looks_like_quota_error(exc: Exception) -> bool:
+    """
+    Check if an exception looks like a quota/rate-limit/overload error that should be retried.
+    Includes: 429, 503, RESOURCE_EXHAUSTED, quota exceeded, model overloaded, etc.
+    """
     msg = str(exc) or ""
     msg_u = msg.upper()
-    return ("RESOURCE_EXHAUSTED" in msg_u) or ("QUOTA" in msg_u and "EXCEEDED" in msg_u) or ("429" in msg_u)
+    # Check for various quota/rate-limit indicators
+    quota_indicators = [
+        "RESOURCE_EXHAUSTED",
+        "QUOTA" in msg_u and "EXCEEDED" in msg_u,
+        "429" in msg_u,
+        "503" in msg_u,
+        "UNAVAILABLE" in msg_u,
+        "OVERLOADED" in msg_u,
+        "MODEL IS OVERLOADED" in msg_u,
+        "TRY AGAIN LATER" in msg_u,
+    ]
+    return any(quota_indicators)
 
 
 def _quota_kind(exc: Exception) -> str:
@@ -164,18 +200,27 @@ def _quota_kind(exc: Exception) -> str:
     msg = str(exc) or ""
     msg_u = msg.upper()
 
-    # Seen in Gemini errors:
-    # - "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
-    # - "...requests per day..."
-    if ("PERDAY" in msg_u) or ("REQUESTS PER DAY" in msg_u) or ("PER-DAY" in msg_u):
+    # Check for daily quota errors - these indicate you've hit the daily limit
+    daily_indicators = [
+        "PERDAY" in msg_u,
+        "REQUESTS PER DAY" in msg_u,
+        "PER-DAY" in msg_u,
+        "EXCEEDED YOUR CURRENT QUOTA" in msg_u,
+        "FREE_TIER_REQUESTS" in msg_u,
+        "GENERATIVELANGUAGE.GOOGLEAPIS.COM/GENERATE_CONTENT_FREE_TIER_REQUESTS" in msg_u,
+        "QUOTA EXCEEDED FOR METRIC" in msg_u and "FREE_TIER" in msg_u,
+    ]
+    if any(daily_indicators):
         return "daily"
 
-    # Seen in errors:
-    # - "Please retry in Xs"
-    # - "retryDelay': '1s'"
+    # Check for rate limit errors - these indicate too many requests in a short time
+    # (but can retry after a delay)
     if re.search(r"retry in\s+[0-9.]+s", msg, flags=re.IGNORECASE) or re.search(
         r"retryDelay[^0-9]*[0-9.]+s", msg, flags=re.IGNORECASE
     ):
+        # If it says "retry in" but also mentions daily quota, it's still daily
+        if "FREE_TIER" in msg_u or "PER DAY" in msg_u:
+            return "daily"
         return "rate"
 
     return "unknown"
@@ -378,7 +423,7 @@ Return ONLY a JSON object (no markdown, no extra text) with exactly these keys:
 }}
 """
 
-    # Basic retry for transient quota/rate-limit errors. Keep it conservative.
+    # Basic retry for transient quota/rate-limit/overload errors. Keep it conservative.
     resp = None
     last_exc: Exception | None = None
     for i in range(3):
@@ -395,11 +440,15 @@ Return ONLY a JSON object (no markdown, no extra text) with exactly these keys:
             if not _looks_like_quota_error(e) or i >= 2:
                 raise
             retry_after = _extract_retry_after_seconds(e)
+            # For 503/overloaded errors, use longer backoff
+            msg = str(e) or ""
+            is_overloaded = "503" in msg.upper() or "UNAVAILABLE" in msg.upper() or "OVERLOADED" in msg.upper()
+            base_delay = 5.0 if is_overloaded else (0.8 * (2 ** i))
             sleep_s = min(
-                3.0,
-                (retry_after if isinstance(retry_after, (int, float)) else (0.8 * (2 ** i))) + (random.random() * 0.2),
+                10.0 if is_overloaded else 3.0,
+                (retry_after if isinstance(retry_after, (int, float)) else base_delay) + (random.random() * 0.5),
             )
-            time.sleep(max(0.2, sleep_s))
+            time.sleep(max(0.5, sleep_s))
 
     if resp is None:
         raise RuntimeError(str(last_exc) if last_exc else "Unknown error generating content")
@@ -520,6 +569,9 @@ def get_prices_for_countries(
     Returns a dict keyed by country code.
     Each value includes: found, price, currency, product_url, evidence, confidence
     or an error object if something failed.
+    
+    Note: Adds delays between country requests to respect Gemini API rate limits
+    (free tier: 2 requests/minute, 50 requests/day).
     """
     product_id = (product_id or "").strip()
     if not product_id:
@@ -529,10 +581,26 @@ def get_prices_for_countries(
     # Retrying with a URL hint can double model calls; only do it for single-country lookups.
     allow_url_hint_retry = len(country_codes) == 1
 
-    for raw in country_codes:
+    # Rate limiting: Gemini free tier allows 2 requests per minute
+    # Add delay between requests to avoid hitting rate limits
+    # Default: 30 seconds between requests (allows 2 requests per minute)
+    # Note: Cached results don't count toward rate limits, but we delay anyway
+    # to be safe (the cache check happens inside _lookup_price_for_country)
+    rate_limit_delay = float(os.getenv("GEMINI_RATE_LIMIT_DELAY_SECONDS", "30.0"))
+    last_request_time = 0.0
+    
+    for idx, raw in enumerate(country_codes):
         code = (raw or "").strip().upper()
         if not code:
             continue
+
+        # Add delay before each request (except the first one) to respect rate limits
+        if idx > 0 and rate_limit_delay > 0:
+            time_since_last = time.time() - last_request_time
+            if time_since_last < rate_limit_delay:
+                sleep_needed = rate_limit_delay - time_since_last
+                time.sleep(sleep_needed)
+        last_request_time = time.time()
 
         try:
             r = _lookup_price_for_country(
@@ -546,6 +614,18 @@ def get_prices_for_countries(
             results[code] = r
         except Exception as e:
             if _looks_like_quota_error(e):
+                # Extract a cleaner error message
+                error_msg = str(e)
+                # Try to extract just the message from dict-like error strings
+                msg_match = re.search(r"'message':\s*['\"]([^'\"]+)['\"]", error_msg)
+                if msg_match:
+                    error_msg = msg_match.group(1)
+                elif "503" in error_msg.upper() or "UNAVAILABLE" in error_msg.upper():
+                    if "overloaded" in error_msg.lower():
+                        error_msg = "The model is overloaded. Please try again later."
+                    else:
+                        error_msg = "Service temporarily unavailable. Please try again later."
+                
                 results[code] = {
                     "country_code": code,
                     "found": False,
@@ -554,16 +634,24 @@ def get_prices_for_countries(
                     if _quota_kind(e) == "daily"
                     else "rate_limited"
                     if _quota_kind(e) == "rate"
+                    else "service_unavailable"
+                    if ("503" in str(e).upper() or "UNAVAILABLE" in str(e).upper())
                     else "quota_exceeded",
-                    "message": str(e),
+                    "message": error_msg,
                     "retry_after": _extract_retry_after_seconds(e),
                 }
                 continue
+            # For other errors, also try to clean up the message
+            error_msg = str(e)
+            # Extract message from dict-like strings
+            msg_match = re.search(r"'message':\s*['\"]([^'\"]+)['\"]", error_msg)
+            if msg_match:
+                error_msg = msg_match.group(1)
             results[code] = {
                 "country_code": code,
                 "found": False,
                 "error": type(e).__name__,
-                "message": str(e),
+                "message": error_msg,
             }
 
     return results

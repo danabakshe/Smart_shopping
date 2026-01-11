@@ -1,7 +1,8 @@
-#!/Users/danabakshe/PycharmProjects/Smart_Shopping_Project/Server/.venv/bin/python
+#!/Users/danabakshe/Cursor_projects/Smart_shopping/Server/.venv/bin/python3.12
+# -*- coding: utf-8 -*-
+import re
 import sys
 from rsa.cli import decrypt
 if __name__ == '__main__':
-    if sys.argv[0].endswith('.exe'):
-        sys.argv[0] = sys.argv[0][:-4]
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
     sys.exit(decrypt())

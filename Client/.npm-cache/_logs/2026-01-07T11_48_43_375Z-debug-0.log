@@ -1,0 +1,51 @@
+0 verbose cli /Users/danabakshe/.nvm/versions/node/v24.12.0/bin/node /Users/danabakshe/.nvm/versions/node/v24.12.0/bin/npm
+1 info using npm@11.6.2
+2 info using node@v24.12.0
+3 silly config load:file:/Users/danabakshe/.nvm/versions/node/v24.12.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/danabakshe/Cursor_projects/Smart_shopping/Client/.npmrc
+5 silly config load:file:/Users/danabakshe/.npmrc
+6 silly config load:file:/Users/danabakshe/.nvm/versions/node/v24.12.0/etc/npmrc
+7 verbose title npm run dev --host 127.0.0.1 --port 3000
+8 verbose argv "run" "dev" "--" "--host" "127.0.0.1" "--port" "3000"
+9 verbose logfile logs-max:10 dir:/Users/danabakshe/Cursor_projects/Smart_shopping/Client/.npm-cache/_logs/2026-01-07T11_48_43_375Z-
+10 verbose logfile /Users/danabakshe/Cursor_projects/Smart_shopping/Client/.npm-cache/_logs/2026-01-07T11_48_43_375Z-debug-0.log
+11 silly logfile done cleaning log files
+12 verbose stack Error: kill EPERM
+12 verbose stack     at ChildProcess.kill (node:internal/child_process:512:26)
+12 verbose stack     at process.handleSignal (/Users/danabakshe/.nvm/versions/node/v24.12.0/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/signal-manager.js:14:10)
+12 verbose stack     at process.emit (node:events:508:28)
+13 verbose pkgid smart-shopping-client@1.0.0
+14 error code EPERM
+15 error syscall kill
+16 error path /Users/danabakshe/Cursor_projects/Smart_shopping/Client
+17 error errno -1
+18 error Error: kill EPERM
+18 error     at ChildProcess.kill (node:internal/child_process:512:26)
+18 error     at process.handleSignal (/Users/danabakshe/.nvm/versions/node/v24.12.0/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/signal-manager.js:14:10)
+18 error     at process.emit (node:events:508:28) {
+18 error   errno: -1,
+18 error   code: 'EPERM',
+18 error   syscall: 'kill',
+18 error   cmd: 'sh',
+18 error   args: [ '-c', 'vite --host 127.0.0.1 --port 3000' ],
+18 error   stdout: null,
+18 error   stderr: null,
+18 error   event: 'dev',
+18 error   script: 'vite',
+18 error   pkgid: 'smart-shopping-client@1.0.0',
+18 error   path: '/Users/danabakshe/Cursor_projects/Smart_shopping/Client'
+18 error }
+19 error
+19 error The operation was rejected by your operating system.
+19 error It is likely you do not have the permissions to access this file as the current user
+19 error
+19 error If you believe this might be a permissions issue, please double-check the
+19 error permissions of the file and its containing directories, or try running
+19 error the command again as root/Administrator.
+20 verbose cwd /Users/danabakshe/Cursor_projects/Smart_shopping/Client
+21 verbose os Darwin 25.2.0
+22 verbose node v24.12.0
+23 verbose npm  v11.6.2
+24 verbose exit -1
+25 verbose code -1
+26 error A complete log of this run can be found in: /Users/danabakshe/Cursor_projects/Smart_shopping/Client/.npm-cache/_logs/2026-01-07T11_48_43_375Z-debug-0.log

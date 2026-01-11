@@ -381,38 +381,31 @@
   white-space: nowrap;
 }
 
-.results-table th:nth-child(1),
-.results-table td:nth-child(1) {
+.results-table .col-site {
   width: 14%;
 }
 
-.results-table th:nth-child(2),
-.results-table td:nth-child(2) {
+.results-table .col-country {
   width: 14%;
 }
 
-.results-table th:nth-child(3),
-.results-table td:nth-child(3) {
+.results-table .col-mkt {
   width: 14%;
 }
 
-.results-table th:nth-child(4),
-.results-table td:nth-child(4) {
+.results-table .col-desc {
   width: 30%;
 }
 
-.results-table th:nth-child(5),
-.results-table td:nth-child(5) {
+.results-table .col-price {
   width: 12%;
 }
 
-.results-table th:nth-child(6),
-.results-table td:nth-child(6) {
+.results-table .col-converted {
   width: 12%;
 }
 
-.results-table th:nth-child(7),
-.results-table td:nth-child(7) {
+.results-table .col-link {
   width: 16%;
 }
 
@@ -430,3 +423,98 @@
   font-weight: 600;
 }
 
+.results-table tbody tr.is-best {
+  background: linear-gradient(90deg, rgba(255, 243, 167, 0.55), rgba(255, 255, 255, 0));
+}
+
+.results-table td.price.is-best {
+  position: relative;
+}
+
+.results-table td.price.is-best .price-value {
+  display: inline-block;
+  padding: 0.1rem 0.25rem;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 55%, rgba(255, 232, 94, 0.85) 55%);
+}
+
+.results-table .site-cell {
+  position: relative;
+  overflow: visible;
+}
+
+.results-table .site-cell-value {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.results-table .best-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 232, 94, 0.9);
+  color: #3a2f00;
+  font-size: 0.75rem;
+  font-weight: 800;
+  border: 1px solid rgba(58, 47, 0, 0.18);
+  white-space: nowrap;
+}
+
+.results-table .best-badge--between {
+  position: absolute;
+  right: -0.2rem; /* more left (towards Site), still sits in the gap */
+  top: 46%; /* slightly up */
+  transform: translateY(-50%);
+  z-index: 3;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
+.history-panel {
+  background: white;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  width: 50%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: -1rem;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.history-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.history-item-btn {
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #fff;
+  cursor: pointer;
+}
+
+.history-item-btn:hover {
+  background: #fafafa;
+}
