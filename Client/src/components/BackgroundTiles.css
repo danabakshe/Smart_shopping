@@ -1,0 +1,33 @@
+.bg-tiles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.bg-tile {
+  position: absolute;
+  top: var(--t);
+  left: var(--l);
+  width: var(--s);
+  height: var(--s);
+  transform: rotate(var(--r));
+  opacity: var(--o);
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  object-fit: contain;
+  filter: grayscale(100%) contrast(1.05);
+}
+
+@media (max-width: 900px) {
+  .bg-tile {
+    width: calc(var(--s) * 0.8);
+    height: calc(var(--s) * 0.8);
+  }
+}
+
+

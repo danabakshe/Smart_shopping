@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f0f0f0"/>
+    </linearGradient>
+    <filter id="grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="
+        0 0 0 0 0
+        0 0 0 0 0
+        0 0 0 0 0
+        0 0 0 0.05 0"/>
+    </filter>
+  </defs>
+  <rect width="600" height="600" fill="url(#bg)"/>
+  <rect width="600" height="600" filter="url(#grain)"/>
+
+  <!-- Jewelry: ring + necklace (black & white, editorial) -->
+  <g fill="none" stroke="#111" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="210" cy="330" r="110" opacity="0.92"/>
+    <path d="M150 270c40-30 80-30 120 0" opacity="0.5"/>
+    <path d="M315 210c45-65 115-105 190-105 85 0 155 55 155 145" opacity="0.55"/>
+    <path d="M660 250c0 90-70 145-155 145-75 0-145-40-190-105" opacity="0.55"/>
+  </g>
+  <g>
+    <circle cx="470" cy="355" r="38" fill="#111" opacity="0.12"/>
+    <path d="M470 325l18 24-18 24-18-24z" fill="#111" opacity="0.18"/>
+    <path d="M470 325l10 14-10 14-10-14z" fill="#111" opacity="0.35"/>
+  </g>
+</svg>
+
