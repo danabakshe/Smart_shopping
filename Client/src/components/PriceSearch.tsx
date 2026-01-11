@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { api, Country, FxResponse, PriceResult, Site } from '../services/api'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { api, AuthUser, Country, FxResponse, HistoryItem, PriceResult, Site } from '../services/api'
 import './PriceSearch.css'
 
 type PriceRow = {
@@ -76,7 +76,7 @@ function formatCurrency(amount: number, currency: FxCurrency): string {
   }
 }
 
-function PriceSearch() {
+function PriceSearch({ user }: { user: AuthUser | null }) {
   const [sites, setSites] = useState<Site[]>([])
   const [selectedSiteKey, setSelectedSiteKey] = useState<string>('')
   const [loadingSites, setLoadingSites] = useState(true)
@@ -88,9 +88,88 @@ function PriceSearch() {
   const [results, setResults] = useState<PriceRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+
+  const refreshHistory = useCallback(async () => {
+    if (!user) {
+      setHistoryItems([])
+      setHistoryError('Please log in to see your search history.')
+      return
+    }
+    setHistoryError(null)
+    setHistoryLoading(true)
+    try {
+      const items = await api.auth.history()
+      setHistoryItems(items || [])
+    } catch (err) {
+      setHistoryItems([])
+      setHistoryError(err instanceof Error ? err.message : 'Failed to load history')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [user])
+
+  // If user logs out while history is open, close it and clear state.
+  useEffect(() => {
+    if (user) return
+    setHistoryOpen(false)
+    setHistoryLoading(false)
+    setHistoryItems([])
+    setHistoryError(null)
+  }, [user])
+
+  // Auto-refresh history when panel opens
+  useEffect(() => {
+    if (historyOpen && user) {
+      refreshHistory()
+    }
+  }, [historyOpen, user, refreshHistory])
+
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedFxCurrency, setSelectedFxCurrency] = useState<FxCurrency>('USD')
   const [usdPerUnit, setUsdPerUnit] = useState<Record<FxCurrency, number>>(() => getUsdPerUnitRatesFallback())
+  const [hasSearchedWithAdvanced, setHasSearchedWithAdvanced] = useState(false)
+
+  const mockEnabled = useMemo(() => {
+    const env: any = (import.meta as any)?.env || {}
+    const v = env.VITE_USE_MOCK
+    if (typeof v === 'string' && ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase())) return true
+    try {
+      if (typeof window !== 'undefined') {
+        const sp = new URLSearchParams(window.location.search)
+        const qp = (sp.get('mock') || '').trim().toLowerCase()
+        if (['1', 'true', 'yes', 'on'].includes(qp)) return true
+        const ls = (window.localStorage?.getItem('use_mock') || '').trim().toLowerCase()
+        if (['1', 'true', 'yes', 'on'].includes(ls)) return true
+      }
+    } catch {
+      // ignore
+    }
+    return false
+  }, [])
+
+  const toggleMockMode = () => {
+    try {
+      if (typeof window === 'undefined') return
+      window.localStorage?.setItem('use_mock', mockEnabled ? 'false' : 'true')
+      const url = new URL(window.location.href)
+      url.searchParams.delete('mock')
+      window.location.href = url.toString()
+    } catch {
+      // ignore
+    }
+  }
+
+  const showSwitchToMock =
+    !mockEnabled &&
+    typeof error === 'string' &&
+    (error.toLowerCase().includes('daily quota') ||
+      error.toLowerCase().includes('quota') ||
+      error.toLowerCase().includes('resource_exhausted') ||
+      error.toLowerCase().includes('rate limit'))
 
   const [siteOpen, setSiteOpen] = useState(false)
   const [siteHighlightedIdx, setSiteHighlightedIdx] = useState<number>(-1)
@@ -275,8 +354,33 @@ function PriceSearch() {
         const fallbackDescParts = [description]
         if (!r.found) {
           fallbackDescParts.push('Price not found')
-          const detail = r.message || r.error || ''
-          if (detail) fallbackDescParts.push(detail)
+          // Extract cleaner error message
+          let detail = r.message || r.error || ''
+          if (detail) {
+            // Try to extract just the message from dict-like error strings
+            const msgMatch = detail.match(/'message':\s*['"]([^'"]+)['"]/)
+            if (msgMatch) {
+              detail = msgMatch[1]
+            } else if (detail.includes('Daily quota exceeded') || detail.includes('quota exceeded') || r.error_code === 'daily_quota') {
+              // Handle daily quota errors - show helpful message
+              if (detail.includes('Daily quota exceeded')) {
+                // Already formatted by backend
+                detail = detail
+              } else {
+                detail = 'Daily quota exceeded (20 requests/day limit). Please try again tomorrow or upgrade your API plan.'
+              }
+            } else if (detail.includes('503') || detail.includes('UNAVAILABLE')) {
+              // Handle 503/overloaded errors with user-friendly message
+              if (detail.toLowerCase().includes('overloaded')) {
+                detail = 'Service temporarily overloaded. Please try again in a moment.'
+              } else {
+                detail = 'Service temporarily unavailable. Please try again later.'
+              }
+            } else if (detail.includes('Failed to parse JSON')) {
+              detail = 'Unable to parse response. The service may be experiencing issues.'
+            }
+            if (detail) fallbackDescParts.push(detail)
+          }
         }
 
         return {
@@ -299,6 +403,25 @@ function PriceSearch() {
       }
 
       setResults(rows)
+      setHasSearchedWithAdvanced(advancedOpen)
+      
+      // Record history after successful search
+      // In mock mode, we need to call the backend separately to record history
+      if (user) {
+        const productId = data.product_id || mkt.trim()
+        if (productId) {
+          if (mockEnabled) {
+            // In mock mode, make a separate API call to record history
+            api.auth.recordHistory(productId).catch(() => {
+              // Silently fail - history recording is best-effort
+            })
+          }
+          // Refresh history after a delay to ensure backend has committed
+          setTimeout(() => {
+            refreshHistory()
+          }, 1500)
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch price')
     } finally {
@@ -306,10 +429,43 @@ function PriceSearch() {
     }
   }
 
-  const showConvertedColumn = advancedOpen && Boolean(selectedFxCurrency)
+  const showConvertedColumn = results !== null && hasSearchedWithAdvanced && Boolean(selectedFxCurrency)
+
+  const bestRowKeys = useMemo(() => {
+    if (!results || results.length === 0) return new Set<string>()
+
+    const comparable: Array<{ key: string; value: number }> = []
+    for (const row of results) {
+      if (!row.found || row.price == null) continue
+      const from = normalizeCurrency(row.currencyRaw)
+      if (!from) continue
+      const v = convertCurrency(row.price, from, selectedFxCurrency, usdPerUnit)
+      if (!Number.isFinite(v)) continue
+      comparable.push({ key: `${row.site}|${row.countryCode}|${row.mkt}`, value: v })
+    }
+
+    if (comparable.length === 0) return new Set<string>()
+    const min = comparable.reduce((acc, x) => Math.min(acc, x.value), Number.POSITIVE_INFINITY)
+    const eps = 1e-6
+    return new Set(comparable.filter((x) => Math.abs(x.value - min) <= eps).map((x) => x.key))
+  }, [results, selectedFxCurrency, usdPerUnit])
 
   return (
     <div className="price-search">
+      {mockEnabled ? (
+        <div className="error-message" role="status" aria-live="polite">
+          <strong>Mock mode:</strong> enabled{' '}
+          <button type="button" className="advanced-toggle" onClick={toggleMockMode}>
+            Disable
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          <button type="button" className="advanced-toggle" onClick={toggleMockMode}>
+            Use Mock Data
+          </button>
+        </div>
+      )}
       <form onSubmit={handleSearch} className="search-form">
         <div className="form-group">
           <label htmlFor="site-trigger">Select Site:</label>
@@ -624,16 +780,104 @@ function PriceSearch() {
             className="advanced-toggle"
             disabled={loading}
             aria-expanded={advancedOpen}
-            onClick={() => setAdvancedOpen((v) => !v)}
+            onClick={() => {
+              if (!advancedOpen) {
+                setHasSearchedWithAdvanced(false)
+              }
+              setAdvancedOpen((v) => !v)
+            }}
           >
             {advancedOpen ? 'Hide Advanced' : 'Advanced Search'}
           </button>
+
+          {user && (
+            <button
+              type="button"
+              className="advanced-toggle"
+              disabled={loading}
+              aria-expanded={historyOpen}
+              onClick={async () => {
+                const next = !historyOpen
+                setHistoryOpen(next)
+                if (next) await refreshHistory()
+              }}
+            >
+              View history
+            </button>
+          )}
         </div>
       </form>
+
+      {user && historyOpen && (
+        <div className="history-panel" role="region" aria-label="View history">
+          <div className="history-panel-header">
+            <strong>Recent searches</strong>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="advanced-toggle"
+                onClick={refreshHistory}
+                disabled={historyLoading}
+                style={{ fontSize: '12px', padding: '4px 8px' }}
+              >
+                Refresh
+              </button>
+              <button type="button" className="advanced-toggle" onClick={() => setHistoryOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          {historyError && (
+            <div className="error-message" role="status" aria-live="polite" style={{ marginTop: 10 }}>
+              <strong>Info:</strong> {historyError}
+            </div>
+          )}
+
+          {!historyError && historyLoading && <div style={{ marginTop: 10, opacity: 0.8 }}>Loading...</div>}
+
+          {!historyError && !historyLoading && (
+            <>
+              {historyItems.length === 0 ? (
+                <div style={{ marginTop: 10, opacity: 0.8 }}>
+                  <div>No recent searches yet.</div>
+                  <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.7 }}>
+                    Perform a search while logged in to see your search history here.
+                  </div>
+                </div>
+              ) : (
+                <ul className="history-list">
+                  {historyItems.map((it) => (
+                    <li key={`${it.mkt}|${it.created_at}`} className="history-item">
+                      <button
+                        type="button"
+                        className="history-item-btn"
+                        onClick={() => {
+                          setMkt(it.mkt)
+                          setHistoryOpen(false)
+                        }}
+                      >
+                        <span className="mono">{it.mkt}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="error-message">
           <strong>Error:</strong> {error}
+          {showSwitchToMock && (
+            <div style={{ marginTop: 10 }}>
+              <button type="button" className="advanced-toggle" onClick={toggleMockMode}>
+                Switch to Mock (no Gemini)
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -644,13 +888,13 @@ function PriceSearch() {
             <table className="results-table">
               <thead>
                 <tr>
-                  <th scope="col">Site</th>
-                  <th scope="col">Country</th>
-                  <th scope="col">MKT</th>
-                  <th scope="col">Item Description</th>
-                  <th scope="col">Price</th>
+                  <th scope="col" className="col-site">Site</th>
+                  <th scope="col" className="col-country">Country</th>
+                  <th scope="col" className="col-mkt">MKT</th>
+                  <th scope="col" className="col-desc">Item Description</th>
+                  <th scope="col" className="col-price">Price</th>
                   {showConvertedColumn && (
-                    <th scope="col">
+                    <th scope="col" className="col-converted">
                       {selectedFxCurrency === 'USD'
                         ? 'Price (USD $)'
                         : selectedFxCurrency === 'EUR'
@@ -658,21 +902,31 @@ function PriceSearch() {
                           : 'Price (ILS ₪)'}
                     </th>
                   )}
-                  <th scope="col">Website Link</th>
+                  <th scope="col" className="col-link">Website Link</th>
                 </tr>
               </thead>
               <tbody>
-                {results.map((row) => (
-                  <tr key={`${row.site}|${row.countryCode}|${row.mkt}`}>
-                    <td>{row.site}</td>
-                    <td>{row.countryLabel}</td>
-                    <td className="mono">{row.mkt}</td>
-                    <td className="desc">{row.description || (row.found ? '' : 'Price not found')}</td>
-                    <td className={`price ${row.found ? 'is-found' : 'is-missing'}`}>
-                      {row.priceWithCurrency || (row.found ? '' : '—')}
+                {results.map((row) => {
+                  const rowKey = `${row.site}|${row.countryCode}|${row.mkt}`
+                  const isBest = bestRowKeys.has(rowKey)
+                  return (
+                  <tr key={rowKey} className={isBest ? 'is-best' : ''}>
+                    <td className="col-site site-cell">
+                      <span className="site-cell-value">{row.site}</span>
+                      {isBest && (
+                        <span className="best-badge best-badge--between" aria-label="Best price">
+                          Best
+                        </span>
+                      )}
+                    </td>
+                    <td className="col-country">{row.countryLabel}</td>
+                    <td className="mono col-mkt">{row.mkt}</td>
+                    <td className="desc col-desc">{row.description || (row.found ? '' : 'Price not found')}</td>
+                    <td className={`price col-price ${row.found ? 'is-found' : 'is-missing'}${isBest ? ' is-best' : ''}`}>
+                      <span className="price-value">{row.priceWithCurrency || (row.found ? '' : '—')}</span>
                     </td>
                     {showConvertedColumn && (
-                      <td className={`price converted ${row.found ? 'is-found' : 'is-missing'}`}>
+                      <td className={`price converted col-converted ${row.found ? 'is-found' : 'is-missing'}${isBest ? ' is-best' : ''}`}>
                         {(() => {
                           if (!row.found || row.price == null) return '—'
                           const from = normalizeCurrency(row.currencyRaw)
@@ -682,7 +936,7 @@ function PriceSearch() {
                         })()}
                       </td>
                     )}
-                    <td>
+                    <td className="col-link">
                       {row.productUrl ? (
                         <a
                           href={row.productUrl}
@@ -697,7 +951,8 @@ function PriceSearch() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
