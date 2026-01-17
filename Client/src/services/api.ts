@@ -309,8 +309,15 @@ export const api = {
         return MOCK_SITES
       }
       const response = await fetch(`${API_BASE_URL}/sites`, { credentials: 'include' })
-      if (!response.ok) throw new Error('Failed to fetch sites')
-      return response.json()
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error')
+        throw new Error(`Failed to fetch sites: ${response.status} ${response.statusText} - ${errorText}`)
+      }
+      const data = await response.json()
+      if (!Array.isArray(data)) {
+        throw new Error(`Invalid response format: expected array, got ${typeof data}`)
+      }
+      return data
     }
   },
 
