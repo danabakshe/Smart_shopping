@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, AuthUser, Country, FxResponse, HistoryItem, PriceResult, Site } from '../services/api'
 import './PriceSearch.css'
 
@@ -93,7 +93,7 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
 
-  const refreshHistory = useCallback(async () => {
+  const refreshHistory = async () => {
     if (!user) {
       setHistoryItems([])
       setHistoryError('Please log in to see your search history.')
@@ -103,30 +103,30 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
     setHistoryLoading(true)
     try {
       const items = await api.auth.history()
-      setHistoryItems(items || [])
+      setHistoryItems(items)
     } catch (err) {
       setHistoryItems([])
       setHistoryError(err instanceof Error ? err.message : 'Failed to load history')
     } finally {
       setHistoryLoading(false)
     }
-  }, [user])
+  }
 
-  // If user logs out while history is open, close it and clear state.
+  // If user logs out, clear all search data and reset to default state.
   useEffect(() => {
     if (user) return
+    // Clear history state
     setHistoryOpen(false)
     setHistoryLoading(false)
     setHistoryItems([])
     setHistoryError(null)
+    // Clear search results and reset search state
+    setResults(null)
+    setMkt('')
+    setError(null)
+    setAdvancedOpen(false)
+    setHasSearchedWithAdvanced(false)
   }, [user])
-
-  // Auto-refresh history when panel opens
-  useEffect(() => {
-    if (historyOpen && user) {
-      refreshHistory()
-    }
-  }, [historyOpen, user, refreshHistory])
 
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedFxCurrency, setSelectedFxCurrency] = useState<FxCurrency>('USD')
@@ -404,28 +404,19 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
 
       setResults(rows)
       setHasSearchedWithAdvanced(advancedOpen)
-      
-      // Record history after successful search
-      // In mock mode, we need to call the backend separately to record history
-      if (user) {
-        const productId = data.product_id || mkt.trim()
-        if (productId) {
-          if (mockEnabled) {
-            // In mock mode, make a separate API call to record history
-            api.auth.recordHistory(productId).catch(() => {
-              // Silently fail - history recording is best-effort
-            })
-          }
-          // Refresh history after a delay to ensure backend has committed
-          setTimeout(() => {
-            refreshHistory()
-          }, 1500)
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch price')
     } finally {
       setLoading(false)
+      if (user) {
+        // Refresh history best-effort (server records on /prices)
+        try {
+          const items = await api.auth.history()
+          setHistoryItems(items)
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 
@@ -802,30 +793,19 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
                 if (next) await refreshHistory()
               }}
             >
-              View history
+              Search history
             </button>
           )}
         </div>
       </form>
 
       {user && historyOpen && (
-        <div className="history-panel" role="region" aria-label="View history">
+        <div className="history-panel" role="region" aria-label="Search history">
           <div className="history-panel-header">
-            <strong>Recent searches</strong>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                className="advanced-toggle"
-                onClick={refreshHistory}
-                disabled={historyLoading}
-                style={{ fontSize: '12px', padding: '4px 8px' }}
-              >
-                Refresh
-              </button>
-              <button type="button" className="advanced-toggle" onClick={() => setHistoryOpen(false)}>
-                Close
-              </button>
-            </div>
+            <strong>Recent searches (last 3)</strong>
+            <button type="button" className="advanced-toggle" onClick={() => setHistoryOpen(false)}>
+              Close
+            </button>
           </div>
 
           {historyError && (
@@ -839,12 +819,7 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
           {!historyError && !historyLoading && (
             <>
               {historyItems.length === 0 ? (
-                <div style={{ marginTop: 10, opacity: 0.8 }}>
-                  <div>No recent searches yet.</div>
-                  <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.7 }}>
-                    Perform a search while logged in to see your search history here.
-                  </div>
-                </div>
+                <div style={{ marginTop: 10, opacity: 0.8 }}>No recent searches yet.</div>
               ) : (
                 <ul className="history-list">
                   {historyItems.map((it) => (

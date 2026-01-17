@@ -87,6 +87,7 @@ function App() {
         mode={authOpen ?? 'login'}
         onClose={() => setAuthOpen(null)}
         onSuccess={(u) => setUser(u)}
+        onModeChange={(newMode) => setAuthOpen(newMode)}
       />
     </div>
   )
