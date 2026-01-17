@@ -10,11 +10,13 @@ export default function AuthModal({
   mode,
   onClose,
   onSuccess,
+  onModeChange,
 }: {
   open: boolean
   mode: AuthModalMode
   onClose: () => void
   onSuccess: (user: AuthUser) => void
+  onModeChange?: (newMode: AuthModalMode) => void
 }) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement | null>(null)
@@ -40,7 +42,11 @@ export default function AuthModal({
   }, [open, onClose])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      // Clear everything when modal closes
+      setSuccessMessage(null)
+      return
+    }
     setUsername('')
     setEmail('')
     setPassword('')
@@ -49,7 +55,8 @@ export default function AuthModal({
     setNewPassword('')
     setSubmitting(false)
     setError(null)
-    setSuccessMessage(null)
+    // Don't clear successMessage here - let it persist when switching modes
+    // It will be cleared when modal closes or explicitly set to null
     // focus after render
     setTimeout(() => {
       if (forgotPasswordStep === 'email') {
@@ -118,6 +125,7 @@ export default function AuthModal({
                 
                 if (mode === 'login') {
                   const user = await api.auth.login(u, p)
+                  setSuccessMessage(null)
                   onSuccess(user)
                   onClose()
                 } else {
@@ -127,9 +135,20 @@ export default function AuthModal({
                     setSubmitting(false)
                     return
                   }
-                  const user = await api.auth.signup(u, e, p)
-                  onSuccess(user)
-                  onClose()
+                  await api.auth.signup(u, e, p)
+                  // After successful signup, show success message and switch to login mode
+                  setSuccessMessage('Account created successfully! Please log in.')
+                  setUsername('')
+                  setPassword('')
+                  setEmail('')
+                  setError(null)
+                  // Switch to login mode after a brief delay
+                  setTimeout(() => {
+                    if (onModeChange) {
+                      onModeChange('login')
+                    }
+                    // Keep success message visible in login form
+                  }, 1500)
                 }
               } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Authentication failed'
@@ -183,6 +202,12 @@ export default function AuthModal({
             {error && (
               <div className="error-message" role="alert" style={{ marginBottom: 10, fontSize: '12px', lineHeight: '1.4', width: '100%', padding: '8px 12px' }}>
                 <strong>Error:</strong> {error}
+              </div>
+            )}
+
+            {successMessage && (
+              <div role="alert" style={{ marginBottom: 10, fontSize: '12px', lineHeight: '1.4', width: '100%', padding: '8px 12px', background: '#d4edda', color: '#155724', borderRadius: '4px' }}>
+                {successMessage}
               </div>
             )}
 
