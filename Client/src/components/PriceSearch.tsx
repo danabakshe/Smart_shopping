@@ -112,9 +112,8 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
     }
   }
 
-  // If user logs out, clear all search data and reset to default state.
+  // Reset to default screen when user logs in or logs out
   useEffect(() => {
-    if (user) return
     // Clear history state
     setHistoryOpen(false)
     setHistoryLoading(false)
@@ -122,6 +121,8 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
     setHistoryError(null)
     // Clear search results and reset search state
     setResults(null)
+    setSelectedSiteKey('')
+    setSelectedCountries([])
     setMkt('')
     setError(null)
     setAdvancedOpen(false)
@@ -183,27 +184,33 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
     const fetchSites = async () => {
       try {
         const data = await api.sites.list()
-        setSites(data)
-        if (data.length > 0) {
-          setSelectedSiteKey(data[0].key)
+        // Ensure data is an array
+        const sitesArray = Array.isArray(data) ? data : []
+        console.log('Loaded sites:', sitesArray)
+        setSites(sitesArray)
+        // Don't auto-select - let user choose
+        if (sitesArray.length === 0 && !mockEnabled) {
+          // Don't set as error, just log - empty database is a setup issue, not a runtime error
+          console.warn('No sites found in database. Run: cd Server/server && python seed.py')
         }
       } catch (err) {
-        setError('Failed to load sites')
+        console.error('Failed to load sites:', err)
+        setSites([]) // Ensure sites is set to empty array on error
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load sites'
+        setError(errorMessage)
       } finally {
         setLoadingSites(false)
       }
     }
     fetchSites()
-  }, [])
+  }, [mockEnabled])
 
   useEffect(() => {
     const fetchCountries = async () => {
       try {
         const data = await api.countries.list()
         setCountries(data)
-        if (data.length > 0) {
-          setSelectedCountries([data[0].code])
-        }
+        // Don't auto-select - let user choose
       } catch (err) {
         setError('Failed to load countries')
       } finally {
@@ -211,7 +218,7 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
       }
     }
     fetchCountries()
-  }, [])
+  }, [mockEnabled])
 
   useEffect(() => {
     if (!advancedOpen) return
@@ -295,12 +302,14 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
   }
 
   // Keep selection in sync with DB list (e.g., if countries change)
+  // Only filter out invalid selections, don't auto-select
   useEffect(() => {
     if (!countries.length) return
     setSelectedCountries((prev) => {
       const allowed = new Set(allCountryCodes)
       const next = prev.filter((c) => allowed.has(c))
-      return next.length ? next : [allCountryCodes[0]]
+      // Don't auto-select - return empty array if no valid selections
+      return next
     })
   }, [allCountryCodes, countries.length])
 
@@ -523,32 +532,46 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
 
             {siteOpen && !loadingSites && (
               <ul className="custom-select-menu" role="listbox" aria-label="Select Site">
-                {sites.map((site, idx) => {
-                  const isSelected = site.key === selectedSiteKey
-                  const isHighlighted = idx === siteHighlightedIdx
-                  return (
-                    <li
-                      key={site.key}
-                      role="option"
-                      aria-selected={isSelected}
-                      className={`custom-select-option${isSelected ? ' is-selected' : ''}${
-                        isHighlighted ? ' is-highlighted' : ''
-                      }`}
-                      onMouseEnter={() => setSiteHighlightedIdx(idx)}
-                      onMouseDown={(e) => {
-                        // Prevent blur/click-outside from closing before selection
-                        e.preventDefault()
-                      }}
-                      onClick={() => {
-                        setSelectedSiteKey(site.key)
-                        setSiteOpen(false)
-                        setSiteHighlightedIdx(-1)
-                      }}
-                    >
-                      {site.name}
-                    </li>
-                  )
-                })}
+                {sites.length === 0 ? (
+                  <li 
+                    className="custom-select-option" 
+                    role="option" 
+                    aria-disabled="true" 
+                    style={{ opacity: 0.6, cursor: 'not-allowed', padding: '8px 12px' }}
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {error && error.includes('Failed to load') 
+                      ? 'Error loading sites. Check console for details.'
+                      : 'No sites in database. Run: cd Server/server && python seed.py'}
+                  </li>
+                ) : (
+                  sites.map((site, idx) => {
+                    const isSelected = site.key === selectedSiteKey
+                    const isHighlighted = idx === siteHighlightedIdx
+                    return (
+                      <li
+                        key={site.key}
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`custom-select-option${isSelected ? ' is-selected' : ''}${
+                          isHighlighted ? ' is-highlighted' : ''
+                        }`}
+                        onMouseEnter={() => setSiteHighlightedIdx(idx)}
+                        onMouseDown={(e) => {
+                          // Prevent blur/click-outside from closing before selection
+                          e.preventDefault()
+                        }}
+                        onClick={() => {
+                          setSelectedSiteKey(site.key)
+                          setSiteOpen(false)
+                          setSiteHighlightedIdx(-1)
+                        }}
+                      >
+                        {site.name}
+                      </li>
+                    )
+                  })
+                )}
               </ul>
             )}
           </div>
