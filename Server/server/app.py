@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 import json
 from pathlib import Path
-
+from flask_cors import CORS
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 
@@ -40,7 +40,7 @@ def create_app(config: dict | None = None) -> Flask:
     )
     
     app = Flask(__name__)
-
+    CORS(app, supports_credentials=True)
     # Default config (local development)
     # Use absolute path relative to this file to ensure consistent database location
     # This ensures the database is always in Server/server/instance/app.db
@@ -75,7 +75,7 @@ def create_app(config: dict | None = None) -> Flask:
             logging.error(traceback.format_exc())
             raise
 
-    app.register_blueprint(api)
+    app.register_blueprint(api, url_prefix='/api')
     
     # Ensure all errors return JSON (not HTML)
     @app.errorhandler(404)
