@@ -40,14 +40,18 @@ def create_app(config: dict | None = None) -> Flask:
     )
     
     app = Flask(__name__)
-    CORS(app, supports_credentials=True)
-    # Default config (local development)
-    # Use absolute path relative to this file to ensure consistent database location
-    # This ensures the database is always in Server/server/instance/app.db
-    db_dir = Path(__file__).parent / "instance"
-    db_dir.mkdir(exist_ok=True)
-    db_path = db_dir / "app.db"
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
+    # Default: local SQLite; override with DATABASE_URL (e.g. RDS)
+    database_url = os.getenv("DATABASE_URL")
+    if database_url and database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    if database_url:
+        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    else:
+        db_dir = Path(__file__).parent / "instance"
+        db_dir.mkdir(exist_ok=True)
+        db_path = db_dir / "app.db"
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # Session cookies (used for login state)
     app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
