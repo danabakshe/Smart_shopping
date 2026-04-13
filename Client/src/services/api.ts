@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api'
+const API_BASE_URL = 'http://13.48.192.158:8000/api';
 
 function readToggle(key: 'VITE_USE_MOCK' | 'VITE_FALLBACK_TO_MOCK_ON_429'): string {
   const env: any = (import.meta as any)?.env || {}
