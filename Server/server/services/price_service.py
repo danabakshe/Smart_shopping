@@ -96,11 +96,14 @@ def _get_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError("Missing GEMINI_API_KEY (or GOOGLE_API_KEY). Check your .env loading.")
-    return genai.Client(api_key=api_key)
-
+    # הגרסה המעודכנת שתומכת טוב יותר במודלים החדשים
+    return genai.Client(
+        api_key=api_key, 
+        http_options={'api_version': 'v1beta'}
+    )
 
 def _model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    return os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 
 def _cache_ttl_seconds() -> int:
@@ -586,7 +589,7 @@ def get_prices_for_countries(
     # Default: 30 seconds between requests (allows 2 requests per minute)
     # Note: Cached results don't count toward rate limits, but we delay anyway
     # to be safe (the cache check happens inside _lookup_price_for_country)
-    rate_limit_delay = float(os.getenv("GEMINI_RATE_LIMIT_DELAY_SECONDS", "30.0"))
+    rate_limit_delay = float(os.getenv("GEMINI_RATE_LIMIT_DELAY_SECONDS", "3.0"))
     last_request_time = 0.0
     
     for idx, raw in enumerate(country_codes):

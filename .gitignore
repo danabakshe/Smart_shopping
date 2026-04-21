@@ -29,3 +29,9 @@ instance/
 Server/.venv/
 Server/**/__pycache__/
 Server/**/instance/
+
+bin/
+lib/
+include/
+share/
+pyvenv.cfg
