@@ -170,7 +170,9 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
     (error.toLowerCase().includes('daily quota') ||
       error.toLowerCase().includes('quota') ||
       error.toLowerCase().includes('resource_exhausted') ||
-      error.toLowerCase().includes('rate limit'))
+      error.toLowerCase().includes('rate limit') ||
+      error.toLowerCase().includes('temporarily unavailable') ||
+      error.toLowerCase().includes('try again later'))
 
   const [siteOpen, setSiteOpen] = useState(false)
   const [siteHighlightedIdx, setSiteHighlightedIdx] = useState<number>(-1)
@@ -219,6 +221,13 @@ function PriceSearch({ user }: { user: AuthUser | null }) {
     }
     fetchCountries()
   }, [mockEnabled])
+
+  // Default to one country so a first search is a single Gemini call (free tier friendly).
+  // `user` is included so after login reset clears the selection, we repopulate when countries are already loaded.
+  useEffect(() => {
+    if (countries.length === 0) return
+    setSelectedCountries((prev) => (prev.length > 0 ? prev : [countries[0].code]))
+  }, [countries, user])
 
   useEffect(() => {
     if (!advancedOpen) return

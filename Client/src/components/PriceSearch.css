@@ -429,9 +429,7 @@
 
 .results-table td.price.is-best {
   position: relative;
-}
-
-.results-table td.price.is-best .price-value {
+}.results-table td.price.is-best .price-value {
   display: inline-block;
   padding: 0.1rem 0.25rem;
   border-radius: 6px;
@@ -449,9 +447,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
-}
-
-.results-table .best-badge {
+}.results-table .best-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;

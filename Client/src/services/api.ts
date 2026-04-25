@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api'
+const API_BASE_URL = 'http://13.48.192.158:8000/api';
 
 function readToggle(key: 'VITE_USE_MOCK' | 'VITE_FALLBACK_TO_MOCK_ON_429'): string {
   const env: any = (import.meta as any)?.env || {}
@@ -367,6 +367,11 @@ export const api = {
           payload = null
         }
         if (response.status === 429) {
+          const errorCode = payload?.error_code
+          const serverErr = typeof payload?.error === 'string' ? payload.error.trim() : ''
+          if (errorCode === 'service_unavailable' && serverErr) {
+            throw new Error(serverErr)
+          }
           const retryAfter = payload?.retry_after
           const seconds =
             typeof retryAfter === 'number' && Number.isFinite(retryAfter)
@@ -437,6 +442,10 @@ export const api = {
 
         if (response.status === 429) {
           const errorCode = payload?.error_code
+          const serverErr = typeof payload?.error === 'string' ? payload.error.trim() : ''
+          if (errorCode === 'service_unavailable' && serverErr) {
+            throw new Error(serverErr)
+          }
           const retryAfter = payload?.retry_after
           const seconds =
             typeof retryAfter === 'number' && Number.isFinite(retryAfter)
