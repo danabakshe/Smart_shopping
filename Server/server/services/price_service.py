@@ -103,7 +103,20 @@ def _get_client() -> genai.Client:
     )
 
 def _model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    configured = (os.getenv("GEMINI_MODEL") or "").strip()
+    if not configured:
+        return "gemini-2.5-flash"
+
+    # Normalize accidental "models/..." prefixes from dashboards/docs.
+    if configured.startswith("models/"):
+        configured = configured[len("models/") :]
+
+    # Compatibility shim: this legacy model is no longer available for our endpoint.
+    # Keep older .env files working by remapping to a currently supported model.
+    if configured == "gemini-1.5-flash":
+        return "gemini-2.5-flash"
+
+    return configured
 
 
 def _cache_ttl_seconds() -> int:
@@ -584,12 +597,12 @@ def get_prices_for_countries(
     # Retrying with a URL hint can double model calls; only do it for single-country lookups.
     allow_url_hint_retry = len(country_codes) == 1
 
-    # Rate limiting: Gemini free tier allows 2 requests per minute
-    # Add delay between requests to avoid hitting rate limits
-    # Default: 30 seconds between requests (allows 2 requests per minute)
+    # Rate limiting: Gemini free tier is often ~2 requests per minute; spacing
+    # must be long enough that multi-country runs do not trip RPM limits.
+    # Override with GEMINI_RATE_LIMIT_DELAY_SECONDS (e.g. 15) if you have higher quota.
     # Note: Cached results don't count toward rate limits, but we delay anyway
     # to be safe (the cache check happens inside _lookup_price_for_country)
-    rate_limit_delay = float(os.getenv("GEMINI_RATE_LIMIT_DELAY_SECONDS", "3.0"))
+    rate_limit_delay = float(os.getenv("GEMINI_RATE_LIMIT_DELAY_SECONDS", "30.0"))
     last_request_time = 0.0
     
     for idx, raw in enumerate(country_codes):

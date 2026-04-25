@@ -367,6 +367,11 @@ export const api = {
           payload = null
         }
         if (response.status === 429) {
+          const errorCode = payload?.error_code
+          const serverErr = typeof payload?.error === 'string' ? payload.error.trim() : ''
+          if (errorCode === 'service_unavailable' && serverErr) {
+            throw new Error(serverErr)
+          }
           const retryAfter = payload?.retry_after
           const seconds =
             typeof retryAfter === 'number' && Number.isFinite(retryAfter)
@@ -437,6 +442,10 @@ export const api = {
 
         if (response.status === 429) {
           const errorCode = payload?.error_code
+          const serverErr = typeof payload?.error === 'string' ? payload.error.trim() : ''
+          if (errorCode === 'service_unavailable' && serverErr) {
+            throw new Error(serverErr)
+          }
           const retryAfter = payload?.retry_after
           const seconds =
             typeof retryAfter === 'number' && Number.isFinite(retryAfter)
